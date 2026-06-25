@@ -1,7 +1,11 @@
+https://claude.ai/share/1ce2ac7c-5cd0-4c10-8637-9ec26ff5cef1 
+
 🪣 Token Bucket Rate Limiter Service
 Small Name: RateGuard (or BucketAPI / ThrottleX / LimitCore)
 
 📌 What It Is
+
+
 
 "A standalone API that rate-limits other APIs as a feature — a product"
 
