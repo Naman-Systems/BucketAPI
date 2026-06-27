@@ -14,6 +14,8 @@ app.get('/health', async (req, res) => {
   }
 });
 
+app.use('/check', require('./routes/check'));
+
 app.use((err, req, res, next) => {
   console.error('[error]', err.message);
   res.status(500).json({ error: 'internal server error' });
