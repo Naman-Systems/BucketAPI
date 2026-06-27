@@ -15,6 +15,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.use('/check', require('./routes/check'));
+app.use('/admin', require('./routes/admin'));
 
 app.use((err, req, res, next) => {
   console.error('[error]', err.message);
