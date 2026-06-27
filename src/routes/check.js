@@ -16,8 +16,9 @@ router.post('/', async (req, res, next) => {
     }
 
     const config = await redis.hgetall(`config:${client_key}`);
-    const rps = parseFloat(config.rps) || DEFAULT_RPS;
-    const burst = parseInt(config.burst, 10) || DEFAULT_BURST;
+    const rps = config && config.rps ? parseFloat(config.rps) : DEFAULT_RPS;
+    const burst = config && config.burst ? parseInt(config.burst, 10) : DEFAULT_BURST;
+    const algorithm = (config && config.algorithm) || 'token_bucket';
 
     const result = await checkTokenBucket(client_key, rps, burst);
 
