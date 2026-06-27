@@ -3,7 +3,7 @@ const express = require('express');
 const redis = require('./redis');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 
 app.get('/health', async (req, res) => {
   try {

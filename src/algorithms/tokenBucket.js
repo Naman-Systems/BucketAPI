@@ -17,7 +17,7 @@ if not tokens then
   last_refill = now
 end
 
-local elapsed = (now - last_refill) / 1000
+local elapsed = math.max(0, (now - last_refill) / 1000)
 local refilled = elapsed * rate
 tokens = math.min(burst, tokens + refilled)
 
