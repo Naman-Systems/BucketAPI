@@ -1,6 +1,7 @@
 const express = require('express');
 const redis = require('../redis');
 const { checkTokenBucket } = require('../algorithms/tokenBucket');
+const { checkSlidingWindow } = require('../algorithms/slidingWindow');
 
 const router = express.Router();
 
@@ -20,7 +21,12 @@ router.post('/', async (req, res, next) => {
     const burst = config && config.burst ? parseInt(config.burst, 10) : DEFAULT_BURST;
     const algorithm = (config && config.algorithm) || 'token_bucket';
 
-    const result = await checkTokenBucket(client_key, rps, burst);
+    let result;
+    if (algorithm === 'sliding_window') {
+      result = await checkSlidingWindow(client_key, rps, burst);
+    } else {
+      result = await checkTokenBucket(client_key, rps, burst);
+    }
 
     res.set('X-RateLimit-Limit', burst);
     res.set('X-RateLimit-Remaining', result.remaining);
