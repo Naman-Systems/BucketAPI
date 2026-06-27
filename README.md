@@ -1,38 +1,147 @@
-https://claude.ai/share/1ce2ac7c-5cd0-4c10-8637-9ec26ff5cef1 
+# BucketAPI
 
-🪣 Token Bucket Rate Limiter Service
-Small Name: BucketAPI
+A standalone rate limiting service. Other backend services call it over HTTP to get an ALLOW or DENY decision. Built with Token Bucket and Sliding Window algorithms, Redis-backed persistent state, and Lua scripts for atomicity.
 
-📌 What It Is
+## Quick Start
 
+```bash
+cp .env.example .env
+docker-compose up -d
+```
 
+App on `http://localhost:3000`. Redis on `localhost:6379`.
 
-"A standalone API that rate-limits other APIs as a feature — a product"
+## API
 
-A networked rate limiting service that other backend services call into, implementing the Token Bucket algorithm with per-client configurable limits, persistent state across restarts, sliding-window mode, and 500+ concurrent requests per second load tested.
+### POST /check
 
-🚫 Why This Isn't a Generic Project
+Returns ALLOW or DENY for a client key.
 
-"Every backend eventually needs rate limiting, but almost nobody builds it as its own networked service that other services call into. This forces you to think about shared state, clock precision, and concurrency instead of just importing a library."
+```bash
+curl -X POST http://localhost:3000/check \
+  -H "Content-Type: application/json" \
+  -d '{"client_key": "user_abc"}'
+```
 
+200 (ALLOW):
+```json
+{ "decision": "ALLOW", "remaining": 14, "reset": 1720000060 }
+```
 
-✅ Core Requirements
-#Requirement01Expose an endpoint that, given a client key, returns ALLOW or DENY based on a token bucket algorithm02Support per-client configurable limits (requests per second, burst sizes) set via an admin endpoint03State must survive a service restart — persist bucket state, don't keep it only in memory04Handle concurrent requests for the SAME client key without letting tokens be double-spent (race condition safe)05Provide a sliding-window mode in addition to token bucket, selectable per client06Return standard rate-limit headers (limit, remaining, reset time) on every response07Include a load test proving correctness under 500+ concurrent requests per second
+429 (DENY):
+```json
+{ "decision": "DENY", "remaining": 0, "reset": 1720000060 }
+```
 
-🎯 Stretch Goals
+Headers on every response:
+```
+X-RateLimit-Limit: 20
+X-RateLimit-Remaining: 14
+X-RateLimit-Reset: 1720000060
+```
 
-Add a distributed mode where multiple instances of your limiter share state correctly
-Build a tiny dashboard showing live request/deny rates per client
+### POST /admin/clients
 
+Configure per-client limits.
 
-🧠 Skills You'll Master
+```bash
+curl -X POST http://localhost:3000/admin/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_key": "user_abc",
+    "algorithm": "token_bucket",
+    "requests_per_second": 10,
+    "burst_size": 15
+  }'
+```
 
-Concurrency control
-Atomic operations
-Algorithm design
-API contracts
-Load testing
+`algorithm` can be `token_bucket` (default) or `sliding_window`.
 
+### GET /admin/clients/:key
 
-🛠️ Suggested Tech Stack (your style)
-ComponentToolBackendFastAPI or Node.js (Express)State StorageRedis (atomic INCR + TTL — perfect for rate limiting)Concurrency SafetyRedis Lua scripts or atomic transactionsAlgorithmToken Bucket + Sliding Window (both)Load Testingk6 or Apache Bench (ab)Admin APIREST endpoints for per-client configDeployRailway.app / Docker
+Get current config and live token count.
+
+```bash
+curl http://localhost:3000/admin/clients/user_abc
+```
+
+```json
+{
+  "client_key": "user_abc",
+  "config": { "algorithm": "token_bucket", "rps": "10", "burst": "15" },
+  "live": { "tokens": 14.2, "last_refill": 1720000055123 }
+}
+```
+
+### GET /health
+
+```bash
+curl http://localhost:3000/health
+```
+
+```json
+{ "status": "ok", "redis": "connected" }
+```
+
+## Load Test
+
+Requires [k6](https://k6.io/docs/getting-started/installation/).
+
+```bash
+k6 run scripts/loadtest.js
+```
+
+Tests 500 virtual users against a single client key. Validates:
+- p99 latency < 10ms
+- No double-spend under concurrent load
+- Correct ALLOW/DENY ratios
+
+Override target URL:
+```bash
+BASE_URL=http://your-host:3000 k6 run scripts/loadtest.js
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
+| `PORT` | `3000` | HTTP port |
+| `DEFAULT_RPS` | `10` | Requests per second for unconfigured clients |
+| `DEFAULT_BURST` | `20` | Burst size for unconfigured clients |
+
+## How It Works
+
+### Token Bucket
+
+State stored in Redis hash `bucket:{client_key}` with fields `tokens` (float) and `last_refill` (unix ms). On every `/check` call, a single Lua script atomically:
+
+1. Reads tokens + last_refill
+2. Refills based on elapsed time: `tokens += elapsed_seconds × rate`
+3. Caps at burst_size
+4. Deducts 1 if available → ALLOW, else → DENY
+5. Writes back
+
+One `EVAL` call = no race condition possible.
+
+### Sliding Window
+
+Uses two counters per client: current window and previous window. Weighted count blends them:
+
+```
+weighted = prev_count × (1 - elapsed_fraction) + curr_count
+```
+
+If weighted < limit → ALLOW. Smoother than fixed windows at boundaries.
+
+### Why Lua and not MULTI/EXEC?
+
+Redis `MULTI/EXEC` (transactions) don't let you read a value and make decisions inside the transaction — you queue commands blindly. Lua scripts execute atomically with full read/write access, so the refill calculation and deduction happen in one uninterruptible step.
+
+## Deploy to Railway
+
+1. Push to GitHub
+2. New project → Deploy from repo
+3. Add Redis plugin
+4. Set env vars: `REDIS_URL` (Railway provides this), `PORT`
+5. Done — Railway auto-provisions persistent volume for Redis
