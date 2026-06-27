@@ -16,6 +16,10 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'client_key is required' });
     }
 
+    if (client_key.length > 256) {
+      return res.status(400).json({ error: 'client_key must be 256 characters or fewer' });
+    }
+
     const config = await redis.hgetall(`config:${client_key}`);
     const rps = config && config.rps ? parseFloat(config.rps) : DEFAULT_RPS;
     const burst = config && config.burst ? parseInt(config.burst, 10) : DEFAULT_BURST;
