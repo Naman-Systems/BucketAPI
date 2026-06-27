@@ -1,8 +1,11 @@
 {
   "name": "bucketapi",
   "version": "1.0.0",
-  "description": "Standalone rate limiting service using Token Bucket and Sliding Window algorithms",
+  "description": "Standalone rate limiting service — Token Bucket and Sliding Window algorithms over HTTP, backed by Redis Lua scripts",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js"
