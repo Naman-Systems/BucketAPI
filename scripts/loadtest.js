@@ -6,8 +6,13 @@ const allowCount = new Counter('allow_count');
 const denyCount = new Counter('deny_count');
 const allowRate = new Rate('allow_rate');
 
+const BURST_SIZE = 100;
+const REQUESTS_PER_SECOND = 100;
+const TEST_DURATION_SECONDS = 10;
+const MAX_EXPECTED_ALLOWS = BURST_SIZE + REQUESTS_PER_SECOND * TEST_DURATION_SECONDS;
+
 // Run: k6 run scripts/loadtest.js
-// Validates: ≤ burst_size ALLOWs per second window under 500 VUs
+// Validates the initial burst plus tokens refilled during the test under 500 VUs.
 export const options = {
   scenarios: {
     burst_test: {
@@ -21,12 +26,13 @@ export const options = {
     http_req_duration: ['p(99)<10'],
     // At least some requests must be denied (proves rate limiting is active)
     deny_count: ['count>0'],
+    // Include the initially full bucket as well as tokens refilled during the test.
+    allow_count: [`count<${Math.ceil(MAX_EXPECTED_ALLOWS * 1.05) + 1}`],
   },
 };
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 const CLIENT_KEY = 'loadtest_client';
-const BURST_SIZE = 100;
 
 export function setup() {
   // Configure the test client with a known limit
@@ -35,7 +41,7 @@ export function setup() {
     JSON.stringify({
       client_key: CLIENT_KEY,
       algorithm: 'token_bucket',
-      requests_per_second: 100,
+      requests_per_second: REQUESTS_PER_SECOND,
       burst_size: BURST_SIZE,
     }),
     { headers: { 'Content-Type': 'application/json' } }
@@ -74,19 +80,16 @@ export function handleSummary(data) {
   const allows = data.metrics.allow_count ? data.metrics.allow_count.values.count : 0;
   const denies = data.metrics.deny_count ? data.metrics.deny_count.values.count : 0;
   const totalRequests = allows + denies;
-  const durationSec = 10;
 
   console.log('\n=== BucketAPI Load Test Summary ===');
   console.log(`Total requests : ${totalRequests}`);
   console.log(`ALLOWs         : ${allows}`);
   console.log(`DENYs          : ${denies}`);
-  console.log(`Expected ALLOWs: ~${BURST_SIZE * durationSec} (${BURST_SIZE}/s × ${durationSec}s)`);
-  console.log(`Allow rate     : ${((allows / totalRequests) * 100).toFixed(1)}%`);
+  console.log(`Expected ALLOWs: ≤${MAX_EXPECTED_ALLOWS} (initial burst + ${REQUESTS_PER_SECOND}/s × ${TEST_DURATION_SECONDS}s)`);
+  console.log(`Allow rate     : ${totalRequests ? ((allows / totalRequests) * 100).toFixed(1) : '0.0'}%`);
 
-  // Correctness check: ALLOWs should not exceed burst_size * test_duration_seconds
-  const maxExpectedAllows = BURST_SIZE * durationSec;
-  if (allows > maxExpectedAllows * 1.05) {
-    console.error(`FAIL: too many ALLOWs (${allows} > ${maxExpectedAllows} + 5% tolerance) — double-spend detected`);
+  if (allows > MAX_EXPECTED_ALLOWS * 1.05) {
+    console.error(`FAIL: too many ALLOWs (${allows} > ${MAX_EXPECTED_ALLOWS} + 5% tolerance) — double-spend detected`);
   } else {
     console.log(`PASS: ALLOW count within expected range (no double-spend)`);
   }

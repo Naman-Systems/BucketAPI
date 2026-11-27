@@ -13,6 +13,10 @@ router.post('/clients', async (req, res, next) => {
       return res.status(400).json({ error: 'client_key is required' });
     }
 
+    if (client_key.length > 256) {
+      return res.status(400).json({ error: 'client_key must be 256 characters or fewer' });
+    }
+
     if (algorithm && !VALID_ALGORITHMS.includes(algorithm)) {
       return res.status(400).json({ error: `algorithm must be one of: ${VALID_ALGORITHMS.join(', ')}` });
     }

@@ -38,11 +38,11 @@ end
 return { decision, tostring(remaining), tostring(reset) }
 `;
 
-async function checkSlidingWindow(clientKey, rps, burst) {
+async function checkSlidingWindow(clientKey, rps) {
   const key = `sw:${clientKey}`;
   const now = Date.now();
   const windowMs = 1000;
-  const result = await redis.eval(LUA, 1, key, now, windowMs, burst);
+  const result = await redis.eval(LUA, 1, key, now, windowMs, rps);
   return {
     decision: result[0],
     remaining: parseInt(result[1], 10),

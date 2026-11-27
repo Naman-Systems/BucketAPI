@@ -148,8 +148,8 @@ Configure per-client limits. All fields are optional — only send what you want
 |-------|------|-------------|
 | `client_key` | string | Required. The key to configure. |
 | `algorithm` | `"token_bucket"` \| `"sliding_window"` | Which algorithm to use. Default: `token_bucket`. |
-| `requests_per_second` | number > 0 | Refill rate. Default: env `DEFAULT_RPS` (10). |
-| `burst_size` | integer ≥ 1 | Max bucket capacity. Default: env `DEFAULT_BURST` (20). |
+| `requests_per_second` | number > 0 | Token refill rate, or sliding-window request limit per second. Default: env `DEFAULT_RPS` (10). |
+| `burst_size` | integer ≥ 1 | Token-bucket capacity; not used by sliding window. Default: env `DEFAULT_BURST` (20). |
 
 **Response**
 ```json
@@ -223,7 +223,7 @@ last_refill  → "1720000055123" (unix ms, updated on every call)
 
 ### Sliding Window
 
-Fixed windows have a boundary problem: you can send `burst_size` requests at 00:59.999 and `burst_size` more at 01:00.001 — 2× the limit in 2ms.
+Fixed windows have a boundary problem: requests near a window boundary can exceed the intended per-second rate. The sliding-window algorithm uses `requests_per_second` as its limit; `burst_size` does not apply.
 
 The sliding window fixes this with a weighted blend:
 
@@ -231,7 +231,7 @@ The sliding window fixes this with a weighted blend:
 weighted = prev_count × (1 − elapsed_fraction) + curr_count
 ```
 
-If you're 30% into the current 1-second window, the previous window contributes 70% of its count. This approximates a true sliding window at O(1) cost.
+If you're 30% into the current 1-second window, the previous window contributes 70% of its count. Requests are allowed while the weighted count is below `requests_per_second`. This approximates a true sliding window at O(1) cost.
 
 **Redis state** — two string keys per client:
 ```

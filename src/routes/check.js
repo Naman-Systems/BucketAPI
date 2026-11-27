@@ -27,12 +27,12 @@ router.post('/', async (req, res, next) => {
 
     let result;
     if (algorithm === 'sliding_window') {
-      result = await checkSlidingWindow(client_key, rps, burst);
+      result = await checkSlidingWindow(client_key, rps);
     } else {
       result = await checkTokenBucket(client_key, rps, burst);
     }
 
-    res.set('X-RateLimit-Limit', burst);
+    res.set('X-RateLimit-Limit', algorithm === 'sliding_window' ? rps : burst);
     res.set('X-RateLimit-Remaining', result.remaining);
     res.set('X-RateLimit-Reset', result.reset);
 

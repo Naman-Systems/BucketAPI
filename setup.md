@@ -23,12 +23,14 @@ cd BucketAPI
 cp .env.example .env
 ```
 
-`.env` defaults work as-is for local dev — no changes needed.
+The defaults work as-is for local development. Docker Compose overrides `REDIS_URL`
+inside the app container to use the `redis` service; the `localhost` URL in `.env`
+remains suitable when running Node.js directly.
 
 **2. Start**
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 This builds the app image, starts Redis 7 with persistence enabled, and waits for Redis to pass its health check before starting the app.
@@ -43,15 +45,15 @@ curl http://localhost:3000/health
 **4. Stop**
 
 ```bash
-docker-compose down         # stops containers, keeps Redis data
-docker-compose down -v      # stops containers AND deletes Redis data
+docker compose down         # stops containers, keeps Redis data
+docker compose down -v      # stops containers AND deletes Redis data
 ```
 
 **View logs**
 
 ```bash
-docker-compose logs -f app    # app logs
-docker-compose logs -f redis  # redis logs
+docker compose logs -f app    # app logs
+docker compose logs -f redis  # redis logs
 ```
 
 ---
@@ -149,6 +151,7 @@ Response:
 ```
 
 Fields are all optional — only send what you want to change. Unset fields keep their current values.
+For `sliding_window`, `requests_per_second` is the request limit per second; `burst_size` applies only to `token_bucket`.
 
 **Switch a client to sliding window:**
 ```bash
